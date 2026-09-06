@@ -26,6 +26,7 @@ import type {ServiceTier} from "./app-server/ServiceTier";
 import type {JsonValue} from "./app-server/serde_json/JsonValue";
 import {ModelId} from "./ModelId";
 import {AgentMode} from "./AgentMode";
+import {externalSandboxPolicy} from "./ExternalSandbox";
 import path from "node:path";
 import {logger} from "./Logger";
 import {sanitizeMcpServerName} from "./McpServerName";
@@ -1030,7 +1031,16 @@ export class CodexAcpClient {
             input: input,
             approvalPolicy: agentMode.approvalPolicy,
             approvalsReviewer: agentMode.approvalsReviewer,
-            sandboxPolicy: addAdditionalDirectoriesToSandboxPolicy(agentMode.sandboxPolicy, additionalDirectories),
+            // An outer sandbox, when the host declares one, replaces the mode's
+            // own policy and nothing else -- the approval policy above is left as
+            // the mode chose it, so a host that routes tool calls through its own
+            // gate keeps getting asked. See ExternalSandbox.ts for why no other
+            // channel can express this. Additional directories are dropped with
+            // the policy they belong to: writable roots are the outer sandbox's
+            // to decide, and addAdditionalDirectoriesToSandboxPolicy already
+            // ignores every policy but workspaceWrite.
+            sandboxPolicy: externalSandboxPolicy()
+                ?? addAdditionalDirectoriesToSandboxPolicy(agentMode.sandboxPolicy, additionalDirectories),
             summary: disableSummary ? "none" : "auto",
             effort: effort,
             model: modelId.model,

@@ -1278,6 +1278,51 @@ describe('ACP server test', { timeout: 40_000 }, () => {
         expect(turnStartSpy.mock.calls[0]![0].approvalsReviewer).toBe("auto_review");
     });
 
+    it('defers to an outer sandbox without loosening approvals', async () => {
+        // Sandboxes do not nest: with the mode's own policy every command dies
+        // on a second sandbox_apply before it runs. Deferring is the whole fix,
+        // and the approvalPolicy assertion is the half that must NOT change --
+        // the escape hatch that already existed (agent-full-access) buys the
+        // same thing by silencing approvals, which is what makes it useless to
+        // a host that gates tool calls itself.
+        vi.stubEnv("CODEX_ACP_EXTERNAL_SANDBOX", "restricted");
+
+        const mockFixture = createCodexMockTestFixture();
+        const codexAcpAgent = mockFixture.getCodexAcpAgent();
+        const codexAppServerClient = mockFixture.getCodexAppServerClient();
+
+        vi.spyOn(codexAppServerClient, "skillsExtraRootsSet").mockResolvedValue(undefined);
+        vi.spyOn(codexAppServerClient, "listSkills").mockResolvedValue({data: []});
+        const turnStartSpy = vi.spyOn(codexAppServerClient, "turnStart").mockResolvedValue({
+            turn: { id: "turn-id", items: [], status: "inProgress", error: null }
+        } as any);
+        vi.spyOn(codexAppServerClient, "awaitTurnCompleted").mockResolvedValue({
+            threadId: "session-id",
+            turn: { id: "turn-id", items: [], status: "completed", error: null }
+        } as any);
+
+        vi.spyOn(codexAcpAgent, "getSessionState").mockReturnValue(createTestSessionState({
+            sessionId: "session-id",
+            cwd: "/workspace",
+            // Present so the assertion below shows they are dropped WITH the
+            // policy they belong to: writable roots are the outer sandbox's to
+            // decide, not something to carry onto a policy that has no such field.
+            additionalDirectories: ["/workspace/extra"],
+            agentMode: AgentMode.Agent,
+        }));
+
+        await codexAcpAgent.prompt({
+            sessionId: "session-id",
+            prompt: [{ type: "text", text: "Hello" }],
+        });
+
+        expect(turnStartSpy.mock.calls[0]![0].sandboxPolicy).toEqual({
+            type: "externalSandbox",
+            networkAccess: "restricted",
+        });
+        expect(turnStartSpy.mock.calls[0]![0].approvalPolicy).toBe(AgentMode.Agent.approvalPolicy);
+    });
+
     function loadNotifications(){
         //TODO collect logs form dev run and then load them from file to speedup
         const serverNotifications: ServerNotification[] = [

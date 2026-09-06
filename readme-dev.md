@@ -10,6 +10,13 @@ Set `CODEX_PATH` to run a different Codex binary; versions other than the one sp
 - `MODEL_PROVIDER` - model provider to pass to Codex for new sessions.
 - `DEFAULT_AUTH_REQUEST` - ACP auth request JSON used when Codex requires authentication.
 - `INITIAL_AGENT_MODE` - initial mode id: `read-only`, `workspace-write`, `agent`, or `agent-full-access`.
+- `CODEX_ACP_EXTERNAL_SANDBOX` - `restricted` or `enabled`. Set it when the adapter
+  is ALREADY confined by an outer sandbox, so Codex defers to it instead of applying
+  its own. Sandboxes do not nest: on macOS a second `sandbox_apply` fails with
+  `sandbox-exec: sandbox_apply: Operation not permitted` (exit 71) and every command
+  dies before it runs. The value is the network posture the outer sandbox enforces.
+  Only the sandbox is deferred - the approval policy is untouched, so a host that
+  routes tool calls through its own gate keeps getting asked.
 - `NO_BROWSER` - hide browser-based ChatGPT auth when set.
 - `APP_SERVER_LOGS` - directory for adapter logs.
 
